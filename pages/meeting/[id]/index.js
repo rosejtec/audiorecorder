@@ -27,6 +27,7 @@ import "../../../styles/meeting.module.css"
 const server_url = "https://thawing-tundra-96874.herokuapp.com/"
 // const server_url = process.env.NODE_ENV === 'production' ? 'https://video.sebastienbiollo.com' : "http://localhost:4002"
 import dynamic from 'next/dynamic'
+import { use } from 'express/lib/application';
 
 var connections = {}
 const peerConnectionConfig = {
@@ -50,7 +51,10 @@ const Meeting = () => {
   const [askForUsername, setaskForUsername] = useState(true)
   const [username, setusername] = useState(faker.internet.userName())
   const [audioAvailable, setaudioAvailable] = useState(true)
-
+  const [messages, setmessages] = useState([])
+  const [message, setmessage] = useState("")
+  const [newmessages, setnewmessages] = useState(0)
+  const [showModal, setshowModal] = useState(false)
 
   useEffect(() => {
       console.log('effect')
@@ -87,6 +91,7 @@ const Meeting = () => {
         console.log('connected')
         socket.emit('join-call', window.location.href)
         socketId = socket.id
+        socket.on('chat-message', addMessage)
 
         socket.on('user-left', (id) => {
             let video = document.querySelector(`[data-socket="${id}"]`)
@@ -210,7 +215,28 @@ const gotMessageFromServer = (fromId, message) => {
         }
     }
 }
+const openChat = () => {
+    setshowModal(true)
+    setnewmessages(0)
+}
+const closeChat = () =>  setshowModal(false)
 
+const handleMessage = (e) => setmessage(e.target.value)
+
+const addMessage = (data, sender, socketIdSender) => {
+    setmessages(prevState => [...prevState, { "sender": sender, "data": data }])
+
+    if (socketIdSender !== socketId) {
+        setnewmessages(newmessages + 1)
+    }
+}
+
+
+const sendMessage = () => {
+    socket.emit('chat-message', message, username)
+    setmessage("")
+    // this.setState({ message: "", sender: username })
+}
 const changeCssVideos = (main) => {
     let widthMain = main.offsetWidth
     let minWidth = "30%"
@@ -255,18 +281,20 @@ const changeCssVideos = (main) => {
         textArea.focus()
         textArea.select()
         try {
-            document.execCommand('copy')
-            message.success("Link copied to clipboard!")
+            successful = document.execCommand('copy')
+            msg = successful ? 'successful' : 'unsuccessful';    
+            console.log('Copy was ' + msg); 
+            // mess.success("Link copied to clipboard!")
         } catch (err) {
-            message.error("Failed to copy")
+            console.log("Failed to copy")
         }
         document.body.removeChild(textArea)
         return
     }
     navigator.clipboard.writeText(text).then(function () {
-        message.success("Link copied to clipboard!")
+        console.log("Link copied to clipboard!")
     }, () => {
-        message.error("Failed to copy")
+        console.log("Failed to copy")
     })
 }
 const connect = () => {
@@ -401,8 +429,29 @@ const handleEndCall = () => {
 								{audio === true ? <MicOffIcon /> : <MicIcon />}
 							</IconButton>
 
+                            <Badge badgeContent={newmessages} max={999} color="secondary" onClick={openChat}>
+								<IconButton style={{ color: "#424242" }} onClick={openChat}>
+									<ChatIcon />
+								</IconButton>
+							</Badge>
 
 						</div>
+						<Modal show={showModal} onHide={closeChat} style={{ zIndex: "999999" }}>
+							<Modal.Header closeButton>
+								<Modal.Title>Chat Room</Modal.Title>
+							</Modal.Header>
+							<Modal.Body style={{ overflow: "auto", overflowY: "auto", height: "400px", textAlign: "left" }} >
+								{messages.length > 0 ? messages.map((item, index) => (
+									<div key={index} style={{textAlign: "left"}}>
+										<p style={{ wordBreak: "break-all" }}><b>{item.sender}</b>: {item.data}</p>
+									</div>
+								)) : <p>No message yet</p>}
+							</Modal.Body>
+							<Modal.Footer className="div-send-msg">
+								<Input placeholder="Message" value={message} onChange={e => handleMessage(e)} />
+								<Button variant="contained" color="primary" onClick={sendMessage}>Send</Button>
+							</Modal.Footer>
+						</Modal>
 
 						<div className="container">
 							<div style={{ paddingTop: "20px" }}>
