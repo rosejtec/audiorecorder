@@ -23,7 +23,7 @@ import Modal from 'react-bootstrap/Modal'
 import 'bootstrap/dist/css/bootstrap.css'
 import "../../../styles/meeting.module.css"
 
-const server_url = "http://localhost:4002"
+const server_url = process.env.NODE_ENV === 'production' ? 'https://video.sebastienbiollo.com' : "http://localhost:4002"
 import dynamic from 'next/dynamic'
 
 var connections = {}
