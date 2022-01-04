@@ -27,6 +27,7 @@ const server_url = "http://localhost:4002"
 import dynamic from 'next/dynamic'
 
 var connections = {}
+
 const peerConnectionConfig = {
 	'iceServers': [
 		// { 'urls': 'stun:stun.services.mozilla.com' },
@@ -37,10 +38,28 @@ var socket = null
 var socketId = null
 var elms = 0
 
+const Player = ({ srcBlob }) =>{
+    if (!srcBlob) {
+      return null;
+    }
+  
+    return (
+      <video
+        src={URL.createObjectURL(srcBlob)}
+        width={520}
+        height={480}
+        controls
+      />
+    );
+  }
+  
 const Meeting = () => {
   const router = useRouter()
   const { id } = router.query
   const localVideoref = useRef()
+  const mediaChunks = useRef([]);
+//   const mediaStream = useRef(null);
+  const mediaRecorder = useRef(null);
 
   const [videoAvailable, setvideoAvailable] = useState(true)
   const [video, setvideo] = useState(true)
@@ -49,6 +68,9 @@ const Meeting = () => {
   const [username, setusername] = useState(faker.internet.userName())
   const [audioAvailable, setaudioAvailable] = useState(true)
 
+  const [error, setError] = useState(null);
+  const [status, setStatus] = useState("idle");
+  const [mediaBlob, setMediaBlob] = useState(null);
 
   useEffect(() => {
       console.log('effect')
@@ -58,12 +80,24 @@ const Meeting = () => {
   const getPermissions = async () => {
     try {
 
-            navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+            navigator.mediaDevices.getUserMedia({ video: true, audio: true})
                 .then((stream) => {
                     setaudioAvailable(true)
                     setvideoAvailable(true)
+
                     window.localStream = stream
                     localVideoref.current.srcObject = stream
+                    // navigator.mediaDevices.getUserMedia({
+                    //     audio: true
+                    // }).then(audioStream => {
+                    //   audioStream
+                    //      .getAudioTracks()
+                    //     .forEach((audioTrack) => stream.addTrack(audioTrack));
+                    // }).then((audioStream) => {
+                    //     window.localStream = stream
+                    //     localVideoref.current.srcObject = stream
+
+                    // })
                 })
                 .then((stream) => {
                     console.log(stream)
@@ -76,6 +110,82 @@ const Meeting = () => {
       }
   }
 
+  const startRecording = async () => {
+    console.log("ehererro");
+
+    if (error) {
+      console.log("erro");
+      setError(null);
+    }
+
+    // if (!stream) {
+    //   await getMediaStream();
+    // }
+
+    mediaChunks.current = [];
+
+    if (localVideoref.current.srcObject) {
+      mediaRecorder.current = new MediaRecorder(localVideoref.current.srcObject,{mimeType: 'audio/webm;codecs=opus'});
+    //   console.log("here");
+
+      mediaRecorder.current.ondataavailable = async (event)  =>{
+        console.log(event)
+        if (event.data && event.data.size > 0) {
+          mediaChunks.current.push(event.data);
+        }
+      }
+    //   console.log("here");
+      console.log("record", localVideoref.current.srcObject);
+      mediaRecorder.current.start();
+      console.log("here");
+      setStatus("recording");
+    }
+  }
+
+  const handleDataAvailable =(event)  =>{
+    console.log(event)
+    if (event.data && event.data.size > 0) {
+      mediaChunks.current.push(event.data);
+    }
+  }
+
+  const stopRecording = () => {
+    if (mediaRecorder.current) {
+      setStatus("stopping");
+      mediaRecorder.current.stop();
+      // not sure whether to place clean up in useEffect?
+      // If placed in useEffect the handler functions become dependencies of useEffect
+      handleStop();
+      mediaRecorder.current = null;
+      clearMediaStream();
+    }
+  }
+
+  function clearMediaStream() {
+    if (mediaRecorder.current) {
+      mediaRecorder.current = null;
+    }
+  }
+
+  const handleStop = () => {
+    let [sampleChunk] = mediaChunks.current;
+    // let blobPropertyBag = Object.assign(
+    //   { type: "audio/webm" },
+    //   blobOptions
+    // );
+    console.log(sampleChunk)
+    let blob = new Blob(mediaChunks.current, {type: "audio/webm;codecs=opus"});
+
+    setStatus("stopped");
+    setMediaBlob(blob);
+  }
+
+  const handleError = (e) => {
+    setError(e.error);
+    setStatus("idle");
+    onError(e.error);
+  }
+  
   const connectToSocketServer = () => {
     socket = io.connect(server_url, { secure: true,transports : ['websocket']})
 
@@ -271,6 +381,7 @@ const connect = () => {
     console.log('here')
     setaskForUsername(false)
     getMedia()
+    startRecording()
 }
 const handleVideo = () => {
     console.log('handle video')
@@ -360,14 +471,19 @@ const getUserMediaSuccess = (stream) => {
 
 const handleEndCall = () => {
     try {
+        stopRecording()
         let tracks = localVideoref.current.srcObject.getTracks()
         tracks.forEach(track => track.stop())
     } catch (e) {}
-    window.location.href = "/"
+    // window.location.href = "/"
 }
 
   return (
     <>
+    <h1>Video recorder</h1>
+      {status}
+    <Player srcBlob={mediaBlob} />
+
       <h1>Meeting: {id}</h1>
       <div>
 				{askForUsername === true ?
