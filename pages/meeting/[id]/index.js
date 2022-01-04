@@ -14,6 +14,7 @@ import ScreenShareIcon from '@mui/icons-material/ScreenShare'
 import StopScreenShareIcon from '@mui/icons-material/StopScreenShare'
 import CallEndIcon from '@mui/icons-material/CallEnd'
 import ChatIcon from '@mui/icons-material/Chat'
+import { useReactMediaRecorder } from "react-media-recorder";
 
 import { message } from 'antd'
 import 'antd/dist/antd.css'
@@ -48,13 +49,49 @@ const Meeting = () => {
   const [askForUsername, setaskForUsername] = useState(true)
   const [username, setusername] = useState(faker.internet.userName())
   const [audioAvailable, setaudioAvailable] = useState(true)
-
+  const {
+    status,
+    startRecording,
+    stopRecording,
+    mediaBlobUrl
+  } = useReactMediaRecorder({ video: false, type: "video/mp4" });
 
   useEffect(() => {
       console.log('effect')
       getPermissions()
     },[])
   
+    useEffect(() => {
+        console.log("cd");
+        console.log(mediaBlobUrl);
+        if (mediaBlobUrl) {
+          showFile(mediaBlobUrl, "test");
+        }
+    }, [stopRecording]);
+
+
+    const showFile = async (bloburl, documentName) => {
+        const videoBlob = await fetch(bloburl).then((r) => r.blob());
+        console.log(videoBlob);
+    
+        let newBlob = new Blob([videoBlob], { type: "video/mp4" });
+    
+        if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+          window.navigator.msSaveOrOpenBlob(newBlob);
+          return;
+        }
+    
+        const data = window.URL.createObjectURL(newBlob);
+        let link = document.createElement("a");
+        link.href = data;
+        link.download = documentName;
+        // link.click();
+        setTimeout(function () {
+          // For Firefox it is necessary to delay revoking the ObjectURL
+          window.URL.revokeObjectURL(data);
+        }, 100);
+      };
+
   const getPermissions = async () => {
     try {
 
@@ -385,7 +422,24 @@ const handleEndCall = () => {
 						</div>
 					</div>
 					:
+                    
 					<div>
+                            <div className="App">
+      <h1>Hello CodeSandbox</h1>
+      <div>
+        <p>{status}</p>
+        <button onClick={startRecording}>Start Recording</button>
+        <button onClick={stopRecording}>Stop Recording</button>
+        <video src={mediaBlobUrl} controls autoplay loop />
+      </div>
+
+      {/* <ReactMediaRecorder
+        // video
+        // render={({ previewStream }) => {
+        //   return <VideoPreview stream={previewStream} />;
+        // }}
+      /> */}
+    </div>
 						<div className="btn-down" style={{ backgroundColor: "whitesmoke", color: "whitesmoke", textAlign: "center" }}>
 							<IconButton style={{ color: "#424242" }} onClick={handleVideo}>
 								{(video === true) ? <VideocamOffIcon /> : <VideocamIcon />}
