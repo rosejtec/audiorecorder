@@ -15,6 +15,7 @@ import StopScreenShareIcon from '@mui/icons-material/StopScreenShare'
 import CallEndIcon from '@mui/icons-material/CallEnd'
 import ChatIcon from '@mui/icons-material/Chat'
 import { useReactMediaRecorder } from "react-media-recorder";
+import MultiStreamsMixer from 'multistreamsmixer';
 
 import { message } from 'antd'
 import 'antd/dist/antd.css'
@@ -44,6 +45,7 @@ const Meeting = () => {
   const router = useRouter()
   const { id } = router.query
   const localVideoref = useRef()
+  const recorder = useRef()
 
   const [videoAvailable, setvideoAvailable] = useState(true)
   const [video, setvideo] = useState(true)
@@ -51,48 +53,51 @@ const Meeting = () => {
   const [askForUsername, setaskForUsername] = useState(true)
   const [username, setusername] = useState(faker.internet.userName())
   const [audioAvailable, setaudioAvailable] = useState(true)
-  const {
-    status,
-    startRecording,
-    stopRecording,
-    mediaBlobUrl
-  } = useReactMediaRecorder({ video: false, type: "video/mp4" });
+  const [gumStream, setgumStream] = useState(null)
+  const [mediaUrl, setmediaUrl] = useState('')
+  const [state, setstate] = useState('idle')
+//   const {
+//     status,
+//     startRecording,
+//     stopRecording,
+//     mediaBlobUrl
+//   } = useReactMediaRecorder({ audio: true, video: false, type: "audio/wav" });
 
   useEffect(() => {
       console.log('effect')
       getPermissions()
     },[])
   
-    useEffect(() => {
-        console.log("cd");
-        console.log(mediaBlobUrl);
-        if (mediaBlobUrl) {
-          showFile(mediaBlobUrl, "test");
-        }
-    }, [stopRecording]);
+    // useEffect(() => {
+    //     console.log("cd");
+    //     console.log(mediaBlobUrl);
+    //     if (mediaBlobUrl) {
+    //       showFile(mediaBlobUrl, "test");
+    //     }
+    // }, [stopRecording]);
 
 
-    const showFile = async (bloburl, documentName) => {
-        const videoBlob = await fetch(bloburl).then((r) => r.blob());
-        console.log(videoBlob);
+    // const showFile = async (bloburl, documentName) => {
+    //     const videoBlob = await fetch(bloburl).then((r) => r.blob());
+    //     console.log(videoBlob);
     
-        let newBlob = new Blob([videoBlob], { type: "video/mp4" });
+    //     let newBlob = new Blob([videoBlob], { type: "video/mp4" });
     
-        if (window.navigator && window.navigator.msSaveOrOpenBlob) {
-          window.navigator.msSaveOrOpenBlob(newBlob);
-          return;
-        }
+    //     if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+    //       window.navigator.msSaveOrOpenBlob(newBlob);
+    //       return;
+    //     }
     
-        const data = window.URL.createObjectURL(newBlob);
-        let link = document.createElement("a");
-        link.href = data;
-        link.download = documentName;
-        // link.click();
-        setTimeout(function () {
-          // For Firefox it is necessary to delay revoking the ObjectURL
-          window.URL.revokeObjectURL(data);
-        }, 100);
-      };
+    //     const data = window.URL.createObjectURL(newBlob);
+    //     let link = document.createElement("a");
+    //     link.href = data;
+    //     link.download = documentName;
+    //     // link.click();
+    //     setTimeout(function () {
+    //       // For Firefox it is necessary to delay revoking the ObjectURL
+    //       window.URL.revokeObjectURL(data);
+    //     }, 100);
+    //   };
 
   const getPermissions = async () => {
     try {
@@ -405,6 +410,62 @@ const handleEndCall = () => {
     window.location.href = "/"
 }
 
+const stopRecording = () => {
+    recorder.current.stop();
+    gumStream.getAudioTracks()[0].stop();
+    setstate('stop')
+
+}
+
+const startRecording = () => {
+    navigator.mediaDevices.getUserMedia({
+        audio: true
+        // {echoCancellation: false}
+    }).then((stream) => {
+        setgumStream(stream)
+        const audioCtx = new AudioContext();
+
+        const source1 = audioCtx.createMediaStreamSource(stream);
+        const destination = audioCtx.createMediaStreamDestination();
+        console.log(destination)
+
+        source1.connect(destination);
+
+        console.log(source1)
+        // var mixer = new MultiStreamsMixer([microphone1, microphone2]);
+        console.log(connections)
+        Object.keys(connections).forEach((id) => {
+            if (id !== socketId) {
+            // console.log(connections[id].getAudioTracks)
+            console.log(connections[id].getRemoteStreams())
+            // console.log(connections[id].getLocalStreams())
+            connections[id].getRemoteStreams().forEach((remoteStream) =>{
+            console.log(remoteStream)
+            const rem = audioCtx.createMediaStreamSource(remoteStream)
+            rem.connect(destination)
+            })
+          }
+        })
+
+        console.log(destination)
+        recorder.current = new MediaRecorder(destination.stream);
+
+        recorder.current.ondataavailable = function(e) {
+            var url = URL.createObjectURL(e.data);
+            setmediaUrl(url)
+            // var preview = document.createElement('audio');
+            // preview.controls = true;
+            // preview.src = url;
+            // document.body.appendChild(preview);
+        };
+        recorder.current.start();
+        console.log(recorder,'started')
+        setstate('recording')
+    });
+}
+
+
+
   return (
     <>
       <h1>Meeting: {id}</h1>
@@ -427,12 +488,11 @@ const handleEndCall = () => {
                     
 					<div>
                             <div className="App">
-      <h1>Hello CodeSandbox</h1>
+      <h1>{state}</h1>
       <div>
-        <p>{status}</p>
         <button onClick={startRecording}>Start Recording</button>
         <button onClick={stopRecording}>Stop Recording</button>
-        <video src={mediaBlobUrl} controls autoPlay loop />
+        <audio src={mediaUrl} controls autoPlay loop />
       </div>
 
       {/* <ReactMediaRecorder
